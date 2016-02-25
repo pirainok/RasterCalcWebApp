@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <!--The viewport meta tag is used to improve the presentation and behavior of the samples
+    on iOS devices-->
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+  <title>Updating the legend to display visible layers</title>
+
+  <link rel="stylesheet" href="http://js.arcgis.com/3.13/dijit/themes/claro/claro.css">
+  <link rel="stylesheet" href="http://js.arcgis.com/3.13/esri/css/esri.css">
+  <style>
+    html, body {
+      height: 97%;
+      width: 98%;
+      margin: 1%;
+    }
+
+    #rightPane {
+      width: 20%;
+    }
+
+    #legendPane {
+      border: solid #97DCF2 1px;
+    }
+  </style>
+
+  <script src="http://js.arcgis.com/3.13/"></script>
+  <script>
+    var map;
+
+    require([
+      "esri/map",
+      "esri/arcgis/utils",
+      "esri/dijit/Legend",
+      "esri/layers/ArcGISImageServiceLayer",
+      "dojo/dom",
+      "dojo/dom-construct",
+      "dojo/parser",
+      "dojo/_base/array",
+      "dijit/form/CheckBox",
+      "dijit/layout/AccordionContainer",
+      "dijit/layout/BorderContainer",
+      "dijit/layout/ContentPane",
+      "dojo/domReady!"
+    ],
+      function (
+        Map, utils, Legend, ArcGISImageServiceLayer, dom, domConstruct,
+        parser, arrayUtils, CheckBox
+      ) {
+
+        parser.parse();
+
+        var legendLayers = [];
+
+        map = new Map("map", {
+          basemap: "topo",
+          center: [-84.25, 42.6],
+          zoom: 11
+        });
+
+        var quakeLayer = new ArcGISImageServiceLayer("http://indian.geo.msu.edu:6080/arcgis/rest/services/Piraino/ElevationModel/ImageServer");
+
+        legendLayers.push({ layer: quakeLayer, title: 'Earthquakes' });
+
+        var fireLayer = new ArcGISImageServiceLayer("http://indian.geo.msu.edu:6080/arcgis/rest/services/Piraino/Landcover/ImageServer");
+
+        map.on('layers-add-result', function () {
+          var legend = new Legend({
+            map: map,
+            layerInfos: legendLayers
+          }, "legendDiv");
+          legend.startup();
+        });
+        legendLayers.push({ layer: fireLayer, title: "Fire" });
+        map.addLayers([ fireLayer, quakeLayer ]);
+      });
+  </script>
+</head>
+
+<body class="claro">
+<div id="content" data-dojo-type="dijit/layout/BorderContainer"
+     data-dojo-props="design:'headline', gutters:true"
+     style="width: 100%; height: 100%; margin: 0;">
+
+  <div id="rightPane"
+       data-dojo-type="dijit/layout/ContentPane"
+       data-dojo-props="region:'right'">
+
+    <div data-dojo-type="dijit/layout/AccordionContainer">
+      <div data-dojo-type="dijit/layout/ContentPane" id="legendPane"
+           data-dojo-props="title:'Legend', selected:true">
+
+        <div id="legendDiv"></div>
+
+
+      </div>
+
+      <div data-dojo-type="dijit/layout/ContentPane"
+           data-dojo-props="title:'Natural Disasters'">
+
+
+
+        <div id="title">
+             Specify reclass parameters and hit <strong>Apply</strong>.
+        </div>
+        <div id="details">
+        <br /> <label id="Elevation1_Label" for="elev_2">Elevation 1:</label>
+        <input type="text" style="width:5em;" value="0" dojoType="dijit/form/TextBox" id="elev_1">
+        <br /> <label id="Elevation2_Label" for="elev_2">Elevation 2:</label>
+        <input type="text" style="width:5em;"   value="900" dojoType="dijit/form/TextBox" id="elev_2">
+        <br /> <label for="land_1">Landcover:</label>
+        <input type="text" style="width:5em;"  value="0" dojoType="dijit/form/TextBox" id="land_1">
+        <br /> <label for="land_2">Landcover 2:</label> 
+        <input type="text" style="width:5em;"  value="0" dojoType="dijit/form/TextBox" id="land_2">
+        <center>
+        <button data-dojo-type="dijit/form/Button" type="button" id="applyButton"><span>Apply<span></button>
+        </center>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <div id="map"
+       data-dojo-type="dijit/layout/ContentPane"
+       data-dojo-props="region:'center'"
+       style="overflow:hidden;">
+  </div>
+</div>
+
+</body>
+</html>
+

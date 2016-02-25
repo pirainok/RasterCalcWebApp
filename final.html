@@ -1,0 +1,305 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!--The viewport meta tag is used to improve the presentation and behavior of the samples 
+      on iOS devices-->
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Site Suitability Application</title>
+
+    <link rel="stylesheet" href="http://js.arcgis.com/3.13/dijit/themes/claro/claro.css">
+    <link rel="stylesheet" href="http://js.arcgis.com/3.13/esri/css/esri.css">
+    <style>
+      html, body { height: 100%; width: 100%; margin: 0; padding: 0; }
+      .shadow { 
+        background-color:white; 
+        padding:6px;
+      } 
+      #floatingWindow {
+        border:1px solid #aaa;
+        position:absolute;
+        right:25px;bottom:50px;z-index:998;
+        width:220px;
+        color:#00000; 
+        font-family:"Tahoma"; color: black; 
+        text-align:left; 
+      } 
+      #title{ font-size:10pt; padding-left:5px; }
+      #details{font-size:8pt;padding:10px;}
+      .disabled{color:#808080;!important}
+    </style>
+    <!-- add async: true -->
+    <script>var dojoConfig = { parseOnLoad: false, async: true };</script>
+    <script src="http://js.arcgis.com/3.13/"></script>
+    <script>
+      require([
+        "dojo/parser",
+        "dijit/registry",
+        "esri/map",
+        "esri/layers/ImageServiceParameters",
+        "esri/layers/RasterFunction",
+        "esri/layers/ArcGISImageServiceLayer",
+		"esri/dijit/Legend",
+        "dijit/form/TextBox",
+        "dijit/form/Button",
+        "dijit/layout/BorderContainer",
+        "dijit/layout/ContentPane",
+		"dojo/dom",
+		"dojo/dom-construct",
+        "dojo/domReady!"
+      ], function(
+        parser,
+        registry,
+        Map, ImageServiceParameters, RasterFunction, ArcGISImageServiceLayer, Legend
+      ) {
+		parser.parse();  
+		var map;
+		var applyButton;
+		map = new Map("map",{
+		  basemap:"topo",
+		  center:[-120, 37], //long, lat
+		  zoom:8,
+		  sliderStyle:"large"
+		});
+		var legendLayers = [];
+		 //add image service layer
+		var dem = new ArcGISImageServiceLayer("http://sampleserver3.arcgisonline.com/ArcGIS/rest/services/Earthquakes/CaliforniaDEM/ImageServer", {
+			imageServiceParameters: getParametersDEM(),
+			id:"DEM",
+			opacity:0.5
+		});
+		var demSlope = new ArcGISImageServiceLayer("http://sampleserver3.arcgisonline.com/ArcGIS/rest/services/Earthquakes/CaliforniaDEM/ImageServer", {
+			imageServiceParameters: getParametersSlope()
+		});
+		var demAspect = new ArcGISImageServiceLayer("http://sampleserver3.arcgisonline.com/ArcGIS/rest/services/Earthquakes/CaliforniaDEM/ImageServer", {
+			imageServiceParameters: getParametersAspect()
+		});
+		//legendLayers.push({layer:demLeg, title:"Digital Elevation Model"});
+		
+		<!-- var landcov = new ArcGISImageServiceLayer("http://indian.geo.msu.edu:6080/arcgis/rest/services/Piraino/Landcover/ImageServer", {
+		//	imageServiceParameters: getParametersMath(),
+			//id:"Land Cover"
+		//});		
+
+		//var landcovLeg = new ArcGISImageServiceLayer("http://indian.geo.msu.edu:6080/arcgis/rest/services/Piraino/landcovGRID/ImageServer"); //only used to add original image service info to legend
+		// -->
+		map.on('layers-add-result', function () { 
+		  var legend = new Legend({  
+			  map: map,
+			  layerInfos: legendLayers,
+			  autoUpdate: false
+		  }, "legendDiv");
+		  legend.startup(); 
+		});
+		//legendLayers.push({layer:landcovLeg, title:"Land Cover"})
+		map.addLayers([dem, demSlope, demAspect]);
+			   
+		//  update image service rendering rule based on form vals
+		applyButton = registry.byId("applyButton"); 
+		applyButton.onClick = function() {       //function updates the rendering rule for each image service reuturned by RenderRuleDEM and RenderRuleLand
+		  var reclassDem = getRenderRuleDEM();
+		  dem.setRenderingRule(reclassDem);
+		  //var reclassLand = getRenderRuleLand();
+		  //landcov.setRenderingRule(reclassLand);
+		  var reclass_slope = getRenderRuleSlope();
+		  demSlope.setRenderingRule(reclass_slope);
+		  var reclass_aspect = getRenderRuleAspect();
+		  demAspect.setRenderingRule(reclass_aspect);
+		};
+		applyButton = registry.byId("RasterMath"); //issue not here
+		applyButton.onClick = function() {
+			var mathRaster = getRenderRuleMath();
+			dem.setRenderingRule(mathRaster);
+			landcov.setRenderingRule(mathRaster);
+//			console.log(rasterMath);
+			var rasterMath2 = getRenderRuleMath2();
+			demSlope.setRenderingRule(rasterMath2);
+			demAspect.setRenderingRule(rasterMath2);
+			//test 4 raster map algebra
+//			var rasterMathF = getRenderRuleMathFinal();
+//			dem.setRenderingRule(rasterMathF);
+//			landcov.setRenderingRule(rasterMathF);
+//			demSlope.setRenderingRule(rasterMathF);
+//			demAspect.setRenderingRule(rasterMathF);			
+		}
+		function getRenderRuleDEM(){
+			var reclassDEM = new RasterFunction();
+			reclassDEM.functionName = "Remap";
+			reclassDEM.functionArguments = {
+				"InputRanges": [parseFloat(dojo.byId('elev_1').value),parseFloat(dojo.byId('elev_2').value)],
+				"OutputValues": [1],
+				"AllowUnmatched": false
+			}
+			reclassDEM.outputPixelType = "U8";
+			return reclassDEM;
+		}
+		function getParametersDEM() { //creates function getParametersDEM; when called does below
+          var paramsDem = new ImageServiceParameters(); // creates new ImageServiceParametes object called params_dem
+          paramsDem.renderingRule = getRenderRuleDEM(); // sets params_dem's renderingRule to the return of function: getRenderRuleDEM
+          return paramsDem; //returns object params_dem
+        }
+		function getRenderRuleLand(){
+			var reclassLand = new RasterFunction();
+			reclassLand.functionName = "Remap";
+			reclassLand.functionArguments = {
+				"InputRanges": [parseFloat(dojo.byId('land_1').value),parseFloat(dojo.byId('land_2').value)],
+				"OutputValues":[1],
+				"AllowUnmatched": false
+			}
+			reclassLand.outputPixelType = "U8";
+			return reclassLand;
+		}
+		function getParametersLand() {
+          var paramsLand = new ImageServiceParameters();
+          paramsLand.renderingRule = getRenderRuleLand();
+          return paramsLand;
+        }
+		
+		function getRenderRuleMath() {
+			var rasterMath = new RasterFunction();
+			rasterMath.functionName = "Arithmetic";
+			rasterMath.functionArguments = {
+				"Raster": getRenderRuleDEM(),
+				"Raster2": getRenderRuleLand(),
+				"Operation": 3
+			}
+			rasterMath.outputPixelType = "U8";
+			return rasterMath;
+		}
+		function getParametersMath(){
+			var paramsMath = new ImageServiceParameters();
+			paramsMath.renderingRule = getRenderRuleMath();
+			return paramsMath;
+		}
+		
+		//slope Remap from DEM service
+		function getRenderRuleSlope(){
+			var slope = new RasterFunction();
+			slope.functionName = "Slope";
+			slope.functionArguments = {
+				"Zfactor": 0.3,
+				"SlopeType": 1
+			}
+			var reclassSlope = new RasterFunction();
+			reclassSlope.functionName = "Remap";
+			reclassSlope.functionArguments = {
+				"InputRanges": [parseFloat(dojo.byId('slope_1').value),parseFloat(dojo.byId('slope_2').value)],
+				"OutputValues": [1],
+				"AllowUnmatched": false,
+				"Raster": slope
+			}
+			reclassSlope.outputPixelType = "U8";
+			return reclassSlope;
+		}
+		function getParametersSlope() {
+			var paramsSlope = new ImageServiceParameters();
+			paramsSlope.renderingRule = getRenderRuleSlope();
+			return paramsSlope;
+		}
+//		//apsect remap from DEM service
+		function getRenderRuleAspect(){
+			var aspect = new RasterFunction();
+			aspect.functionName = "Aspect";
+			var reclassAspect = new RasterFunction();
+			reclassAspect.functionName = "Remap";
+			reclassAspect.functionArguments = {
+				"InputRanges": [parseFloat(dojo.byId('aspect_1').value),parseFloat(dojo.byId('aspect_2').value)],
+				"OutputValues": [1],
+				"AllowUnmatched": false,
+				"Raster": aspect
+			}
+			reclassAspect.outputPixelType = "U8";
+			return reclassAspect;
+		}
+		
+		function getParametersAspect(){
+			var paramsAspect = new ImageServiceParameters();
+			paramsAspect.renderingRule = getRenderRuleAspect();
+			return paramsAspect;
+		} 
+		//map algebra on slope and aspect raster
+		function getRenderRuleMath2(){
+			var rasterMath2 = new RasterFunction();
+			rasterMath2.functionName = "Arithmetic";
+			rasterMath2.functionArguments = {
+				"Raster" : getRenderRuleSlope(),
+				"Raster2": getRenderRuleAspect(),
+				"Operation": 3
+			}
+			rasterMath2.outputPixelType = "U8";
+			return rasterMath2;
+		}
+		function getParametersMath2(){
+			var paramsMath2 = new ImageServiceParameters();
+			paramsMath2.renderingRule = getRenderRuleMath2();
+			return paramsMath2;
+		}		
+//		function getRenderRuleMathFinal(){
+//			var rasterMathF = new RasterFunction();
+//			rasterMathF.functionName = "Arithmetic";
+//			var functionArguments = {};
+//			functionArguments.Raster = getRenderRuleMath();
+//			functionArguments.Raster2 = getRenderRuleMath2();
+//			functionArguments.Operation = 3;
+//			rasterMathF.functionArguments = functionArguments;
+//			return rasterMathF;
+//		}
+//		function getParametersMathFinal(){
+//			var paramsMathF = new ImageServiceParameters();
+//			paramsMathF.renderingRule = getRenderRuleMathFinal();
+//			return paramsMathF;
+//		}
+      });
+    </script>
+  </head>
+  <!-- TODO: update dojo markup to data-dojo-type, data-dojo-props, etc -->
+   <body class="claro">
+<div id="content" data-dojo-type="dijit/layout/BorderContainer"
+     data-dojo-props="design:'headline', gutters:true"
+     style="width: 100%; height: 100%; margin: 0;">
+
+  <div id="rightPane"
+       data-dojo-type="dijit/layout/ContentPane"
+       data-dojo-props="region:'right'">
+    <div data-dojo-type="dijit/layout/ContentPane">
+
+      <div id="legendDiv"></div>
+      
+      <div id="title">
+             Specify reclass parameters and hit <strong>Apply</strong>.
+             <br /><br />Elevation 1 <strong>MUST</strong> be smaller than Elevation 2.
+             <br /> Landcover 1 <strong> MUST</strong> be smaller than Landcover 2.
+      </div>
+      <div id="details">
+      <br /> <label id="Elevation1_Label" for="elev_1">Elevation 1:</label>
+      <input type="text" style="width:5em;" value="0" dojoType="dijit/form/TextBox" id="elev_1">
+      <br /> <label id="Elevation2_Label" for="elev_2">Elevation 2:</label>
+      <input type="text" style="width:5em;" value="0" dojoType="dijit/form/TextBox" id="elev_2">
+      <br /> <label id="LandCov1_Label" for="land_1">Landcover 1:</label>
+      <input type="text" style="width:5em;"  value="0" dojoType="dijit/form/TextBox" id="land_1">
+      <br /> <label id= "LandCov2_Label" for="land_2">Landcover 2:</label> 
+      <input type="text" style="width:5em;"  value="0" dojoType="dijit/form/TextBox" id="land_2">
+      <br /> <label id="Slope1_Label" for="slope_1">Slope 1:</label>
+      <input type="text" style="width:5em;" value="" dojoType="dijit/form/TextBox" id="slope_1">
+      <br /> <label id="Slope2_Label" for="slope_2">Slope 2:</label>
+      <input type="text" style="width:5em;"   value="" dojoType="dijit/form/TextBox" id="slope_2">
+      <br /> <label id="Aspect1_Label" for="aspect_1">Asepct 1:</label>
+      <input type="text" style="width:5em;" value="" dojoType="dijit/form/TextBox" id="aspect_1">
+      <br /> <label id="Aspect2_Label" for="aspect_2">Aspect 2:</label>
+      <input type="text" style="width:5em;"   value="" dojoType="dijit/form/TextBox" id="aspect_2">
+      <center>
+      <button data-dojo-type="dijit/form/Button" type="button" id="applyButton"><span>Apply<span></button>
+      </center>
+      <br /><center>
+      <button data-dojo-type="dijit/form/Button" type="button" id="RasterMath"><span>Do Math<span></button>
+      </center>
+      </div>
+  	</div>
+  </div>
+  <div id="map"
+       data-dojo-type="dijit/layout/ContentPane"
+       data-dojo-props="region:'center'"
+       style="overflow:hidden;">
+  </div>
+</div>
+  </body>
+</html>

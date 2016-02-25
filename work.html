@@ -1,0 +1,181 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!--The viewport meta tag is used to improve the presentation and behavior of the samples 
+      on iOS devices-->
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Site Suitability Application</title>
+
+    <link rel="stylesheet" href="http://js.arcgis.com/3.13/dijit/themes/claro/claro.css">
+    <link rel="stylesheet" href="http://js.arcgis.com/3.13/esri/css/esri.css">
+    <style>
+      html, body { height: 100%; width: 100%; margin: 0; padding: 0; }
+      .shadow { 
+        background-color:white; 
+        padding:6px;
+      } 
+      #floatingWindow {
+        border:1px solid #aaa;
+        position:absolute;
+        right:25px;bottom:50px;z-index:998;
+        width:220px;
+        color:#00000; 
+        font-family:"Tahoma"; color: black; 
+        text-align:left; 
+      } 
+      #title{ font-size:10pt; padding-left:5px; }
+      #details{font-size:8pt;padding:10px;}
+      .disabled{color:#808080;!important}
+    </style>
+    <!-- add async: true -->
+    <script>var dojoConfig = { parseOnLoad: false, async: true };</script>
+    <script src="http://js.arcgis.com/3.13/"></script>
+    <script>
+      require([
+        "dojo/parser",
+        "dijit/registry",
+        "esri/map",
+        "esri/layers/ImageServiceParameters",
+        "esri/layers/RasterFunction",
+        "esri/layers/ArcGISImageServiceLayer",
+		"esri/dijit/Legend",
+        "dijit/form/TextBox",
+        "dijit/form/Button",
+        "dijit/layout/BorderContainer",
+        "dijit/layout/ContentPane",
+		"dojo/dom",
+		"dojo/dom-construct",
+        "dojo/domReady!"
+      ], function(
+        parser,
+        registry,
+        Map, ImageServiceParameters, RasterFunction, ArcGISImageServiceLayer, Legend
+      ) {
+		parser.parse();  
+		var map;
+		var applyButton;
+		map = new Map("map",{
+		  basemap:"topo",
+		  center:[-84.25, 42.6], //long, lat
+		  zoom:10,
+		  sliderStyle:"large"
+		});
+		var legendLayers = [];
+		 //add image service layer
+		var dem = new ArcGISImageServiceLayer("http://indian.geo.msu.edu:6080/arcgis/rest/services/Piraino/ElevationModel/ImageServer", {
+			imageServiceParameters: getParametersDEM(),
+			id:"DEM",
+			opacity:0.5
+		});
+		var landcov = new ArcGISImageServiceLayer("http://indian.geo.msu.edu:6080/arcgis/rest/services/Piraino/landcovf32/ImageServer", {
+			imageServiceParameters: getParametersLand(),
+			id:"Land Cover"
+		});	
+		map.addLayers([landcov, dem]);
+			   
+		//  update image service rendering rule based on form vals
+		applyButton = registry.byId("applyButton"); 
+		applyButton.onClick = function() {       //function updates the rendering rule for each image service reuturned by RenderRuleDEM and RenderRuleLand
+		  var reclassDem = getRenderRuleDEM();
+		  dem.setRenderingRule(reclassDem);
+		  var reclassLand = getRenderRuleLand();
+		  landcov.setRenderingRule(reclassLand);
+		}
+		mathButton = registry.byId("RasterMath"); //issue not here
+		mathButton.onClick = function() {
+			var rasterMath = getRenderRuleMath();
+			dem.setRenderingRule(rasterMath);
+			landcov.setRenderingRule(rasterMath);		
+		}
+		function getRenderRuleDEM(){
+			var reclassDEM = new RasterFunction();
+			reclassDEM.functionName = "Remap";
+			reclassDEM.functionArguments = {
+				"InputRanges": [parseFloat(dojo.byId('elev_1').value), parseFloat(dojo.byId('elev_2').value)],
+				"OutputValues": [1],
+				"AllowUnmatched": false
+			}
+			return reclassDEM;
+		}
+		function getParametersDEM(){
+			paramsDEM = new ImageServiceParameters();
+			paramsDEM.renderingRule = getRenderRuleDEM();
+			return paramsDEM;
+		}
+		function getRenderRuleLand(){
+			reclassLand = new RasterFunction();
+			reclassLand.functionName = "Remap";
+			reclassLand.functionArguments = {
+				"InputRanges": [parseFloat(dojo.byId('land_1').value), parseFloat(dojo.byId('land_2').value)],
+				"OutputValues": [1],
+				"AllowUnmatched": false
+			}
+			return reclassLand;
+		}
+		function getParametersLand(){
+			paramsLand = new ImageServiceParameters();
+			paramsLand.renderingRule = getRenderRuleLand();
+			return paramsLand;
+		}
+		function getRenderRuleMath(){
+			var rasterMath = new RasterFunction();
+			rasterMath.functionName = "Arithmetic";
+			rasterMath.functionArguments = {
+				"Raster": getRenderRuleDEM(),
+				"Raster2": getRenderRuleLand(),
+				"Operation": 3
+			}
+			return rasterMath;
+		}
+		function getParametersMath(){
+			paramsMath = new ImageServiceParameters();
+			paramsMath.renderingRule = getRenderRuleMath();
+			return paramsMath;
+		}
+      });
+    </script>
+  </head>
+  <!-- TODO: update dojo markup to data-dojo-type, data-dojo-props, etc -->
+   <body class="claro">
+    <div id="content" data-dojo-type="dijit/layout/BorderContainer"
+         data-dojo-props="design:'headline', gutters:true"
+         style="width: 100%; height: 100%; margin: 0;">
+    
+      <div id="rightPane"
+           data-dojo-type="dijit/layout/ContentPane"
+           data-dojo-props="region:'right'">
+        <div data-dojo-type="dijit/layout/ContentPane">
+    
+          <div id="legendDiv"></div>
+          
+          <div id="title">
+                 Specify reclass parameters and hit <strong>Apply</strong>.
+                 <br /><br />Elevation 1 <strong>MUST</strong> be smaller than Elevation 2.
+                 <br /> Landcover 1 <strong> MUST</strong> be smaller than Landcover 2.
+          </div>
+          <div id="details">
+          <br /> <label id="Elevation1_Label" for="elev_1">Elevation 1:</label>
+          <input type="text" style="width:5em;" value="0" dojoType="dijit/form/TextBox" id="elev_1">
+          <br /> <label id="Elevation2_Label" for="elev_2">Elevation 2:</label>
+          <input type="text" style="width:5em;" value="0" dojoType="dijit/form/TextBox" id="elev_2">
+          <br /> <label id="LandCov1_Label" for="land_1">Landcover 1:</label>
+          <input type="text" style="width:5em;"  value="0" dojoType="dijit/form/TextBox" id="land_1">
+          <br /> <label id= "LandCov2_Label" for="land_2">Landcover 2:</label> 
+          <input type="text" style="width:5em;"  value="0" dojoType="dijit/form/TextBox" id="land_2">
+          <center>
+          <button data-dojo-type="dijit/form/Button" type="button" id="applyButton"><span>Apply<span></button>
+          </center>
+          <br /><center>
+          <button data-dojo-type="dijit/form/Button" type="button" id="RasterMath"><span>Do Math<span></button>
+          </center>
+          </div>
+        </div>
+      </div>
+      <div id="map"
+           data-dojo-type="dijit/layout/ContentPane"
+           data-dojo-props="region:'center'"
+           style="overflow:hidden;">
+      </div>
+    </div>
+  </body>
+</html>
